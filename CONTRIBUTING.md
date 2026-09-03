@@ -50,6 +50,11 @@ After a merge to `main`, the `Release` workflow:
 4. Creates the matching GitHub release and generated release notes, then
    removes the temporary branch. The release tag retains the version commit.
 
+The release workflow listens both for ordinary pushes to `main` and for
+successful completion of the owner auto-merge workflow. The second trigger is
+required because merges initiated with `GITHUB_TOKEN` do not emit another
+workflow-triggering push event.
+
 The release workflow is gated by the repository variable
 `NPM_TRUSTED_PUBLISHING_ENABLED=true`. The npm package must trust GitHub Actions
 for owner `mastertyko`, repository `omo-codex-computer`, and workflow filename
