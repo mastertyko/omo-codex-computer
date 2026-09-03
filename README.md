@@ -51,6 +51,12 @@ Remove an installed package with:
 omo remove npm:omo-codex-computer
 ```
 
+## Releases
+
+Owner pull requests run the complete check suite and merge automatically only
+after CI passes. Each merged change produces a patch release with generated
+GitHub release notes and npm trusted-publishing provenance.
+
 ## Tools
 
 The plugin registers twelve `computer_use_*` tools:
