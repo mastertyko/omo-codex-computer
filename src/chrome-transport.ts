@@ -129,7 +129,7 @@ const ERROR_MESSAGES: Readonly<Record<ChromeTransportErrorCode, string>> = Objec
   operation_failed: "Chrome operation failed",
   snapshot_failed: "Chrome could not capture the page snapshot; observe again",
   snapshot_failed_after_action: "Chrome action completed but its snapshot is unavailable",
-  close_failed: "Chrome could not close the agent tab; the close action may be retried",
+  close_failed: "Chrome could not confirm that the agent tab closed",
   interrupted: "Chrome operation was interrupted",
   request_failed: "Chrome transport request failed",
 });
@@ -138,7 +138,7 @@ const ERROR_MESSAGES: Readonly<Record<ChromeTransportErrorCode, string>> = Objec
 // or completed it deterministically. Everything else invalidates the Chrome run.
 const ERROR_POISONS: Readonly<Record<ChromeTransportErrorCode, boolean>> = Object.freeze({
   not_prepared: true,
-  unavailable: false,
+  unavailable: true,
   invalid_request: false,
   protocol_failed: true,
   tab_already_open: false,
@@ -146,11 +146,11 @@ const ERROR_POISONS: Readonly<Record<ChromeTransportErrorCode, boolean>> = Objec
   element_not_found: false,
   ambiguous_locator: false,
   locate_failed: false,
-  navigation_failed: false,
+  navigation_failed: true,
   operation_failed: true,
   snapshot_failed: false,
   snapshot_failed_after_action: false,
-  close_failed: false,
+  close_failed: true,
   interrupted: true,
   request_failed: true,
 });

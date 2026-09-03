@@ -368,28 +368,33 @@ describe("ChromeTransport", () => {
     }
   });
 
-  it("maps the new program error codes onto benign transport errors", async () => {
+  it("maps program error codes onto their side-effect classification", async () => {
     const { client, transport } = createTransport();
     await transport.prepare("/work", initialize);
-    for (const [code, phase] of [
-      ["element_not_found", "locate"],
-      ["ambiguous_locator", "locate"],
-      ["locate_failed", "locate"],
-      ["navigation_failed", "navigate"],
+    for (const [code, phase, poisons] of [
+      ["element_not_found", "locate", false],
+      ["ambiguous_locator", "locate", false],
+      ["locate_failed", "locate", false],
+      ["navigation_failed", "navigate", true],
+      ["close_failed", "close", true],
+      ["unavailable", "setup", true],
     ] as const) {
       client.responses.push(failure(code, phase));
       await expect(transport.execute("/work", identity, { kind: "observe" }))
-        .rejects.toMatchObject({ code, poisons: false, phase });
+        .rejects.toMatchObject({ code, poisons, phase });
     }
   });
 
   it("classifies poisoning versus benign codes on the error type", () => {
     const benign = [
-      "unavailable", "invalid_request", "tab_already_open", "tab_not_open",
-      "element_not_found", "ambiguous_locator", "locate_failed", "navigation_failed",
-      "snapshot_failed", "snapshot_failed_after_action", "close_failed",
+      "invalid_request", "tab_already_open", "tab_not_open",
+      "element_not_found", "ambiguous_locator", "locate_failed",
+      "snapshot_failed", "snapshot_failed_after_action",
     ] as const;
-    const poisoning = ["not_prepared", "protocol_failed", "operation_failed", "interrupted", "request_failed"] as const;
+    const poisoning = [
+      "not_prepared", "protocol_failed", "operation_failed", "interrupted", "request_failed",
+      "navigation_failed", "close_failed", "unavailable",
+    ] as const;
     for (const code of benign) expect(new ChromeTransportError(code).poisons).toBe(false);
     for (const code of poisoning) expect(new ChromeTransportError(code).poisons).toBe(true);
   });

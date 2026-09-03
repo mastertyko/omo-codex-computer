@@ -438,11 +438,8 @@ describe("ChromeRuntime cleanup and invalidation", () => {
       "element_not_found",
       "ambiguous_locator",
       "locate_failed",
-      "navigation_failed",
       "snapshot_failed",
       "snapshot_failed_after_action",
-      "close_failed",
-      "unavailable",
     ] as const;
     const remaining = [...benignCodes];
     transport.executeImpl = async () => {
@@ -464,7 +461,15 @@ describe("ChromeRuntime cleanup and invalidation", () => {
   });
 
   it("still poisons on uncertain transport failures", async () => {
-    for (const code of ["operation_failed", "protocol_failed", "request_failed", "interrupted"] as const) {
+    for (const code of [
+      "operation_failed",
+      "protocol_failed",
+      "request_failed",
+      "interrupted",
+      "navigation_failed",
+      "close_failed",
+      "unavailable",
+    ] as const) {
       const { client, runtime, transport } = createHarness();
       const ctx = createContext();
       transport.executeImpl = async () => {
