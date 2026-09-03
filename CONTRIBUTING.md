@@ -34,6 +34,30 @@ Before submitting a change:
 5. Run `npm pack --dry-run` and inspect packaged resources.
 6. Update README and packaged skills when public behavior changes.
 
+## Pull requests and releases
+
+GitHub Actions runs `bun run check` for every pull request and push to `main`.
+Non-draft pull requests opened by the repository owner from a branch in this
+repository have auto-merge enabled; GitHub merges them only after the required
+`Bun check` succeeds.
+
+After a merge to `main`, the `Release` workflow:
+
+1. Computes the next patch version from the latest `vX.Y.Z` tag.
+2. Updates `package.json`, validates the package, and commits the release
+   version on a temporary `chore/release-vX.Y.Z` branch.
+3. Publishes to npm through GitHub Actions trusted publishing with provenance.
+4. Creates the matching GitHub release and generated release notes, then
+   removes the temporary branch. The release tag retains the version commit.
+
+The release workflow is gated by the repository variable
+`NPM_TRUSTED_PUBLISHING_ENABLED=true`. The npm package must trust GitHub Actions
+for owner `mastertyko`, repository `omo-codex-computer`, and workflow filename
+`release.yml`. No `NPM_TOKEN` is used.
+
+Do not manually bump `package.json` for normal feature pull requests; the
+release workflow owns patch-version commits.
+
 ## OMO extension boundaries
 
 - Import only the public `@code-yeongyu/senpi` API.
