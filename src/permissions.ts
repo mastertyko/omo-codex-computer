@@ -21,7 +21,7 @@ interface BlockedToolCall {
   readonly reason: string;
 }
 
-type PermissionContext = Pick<ExtensionContext, "hasUI" | "ui">;
+type PermissionContext = Pick<ExtensionContext, "mode" | "hasUI" | "ui">;
 
 export function createWritePermissionGuard(
   options: WritePermissionGuardOptions = {},
@@ -32,7 +32,7 @@ export function createWritePermissionGuard(
   return async (event, ctx) => {
     if (!WRITE_TOOL_NAMES.has(event.toolName)) return undefined;
 
-    if (!ctx.hasUI) {
+    if (!ctx.hasUI || ctx.mode !== "tui") {
       return options.allowNonInteractiveWrites?.() === true
         ? undefined
         : block("Write-capable Codex automation requires interactive confirmation");

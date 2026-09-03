@@ -3,6 +3,7 @@ import { createWritePermissionGuard } from "../src/permissions";
 
 function createContext(options: {
   hasUI: boolean;
+  mode?: "tui" | "print";
   approved?: boolean;
   reject?: boolean;
 }) {
@@ -12,6 +13,7 @@ function createContext(options: {
     })
     : vi.fn(async () => options.approved ?? false);
   return {
+    mode: options.mode ?? (options.hasUI ? "tui" : "print"),
     hasUI: options.hasUI,
     ui: { confirm },
     confirm,

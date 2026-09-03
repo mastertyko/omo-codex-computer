@@ -84,6 +84,7 @@ function createFakePi() {
 function createContext() {
   return {
     cwd: "/tmp/project",
+    mode: "tui",
     hasUI: true,
     ui: {
       confirm: vi.fn(async () => true),
@@ -162,13 +163,15 @@ describe("OMO Chrome lifecycle", () => {
     expect(pi.handlers.has("agent_settled")).toBe(true);
   });
 
-  it("delegates headless write authorization to the OMO permission system", async () => {
-    // Given: OMO print mode, where the host permission extension owns policy.
+  it("does not add a plugin confirmation in RPC mode even when UI is available", async () => {
+    // Given: OMO RPC mode, where the host permission extension owns policy
+    // even though extension dialogs are available through the RPC protocol.
     const pi = createFakePi();
     omoCodexComputer(pi as never);
     const permission = pi.handlers.get("tool_call")?.[0];
+    const confirm = vi.fn(async () => true);
 
-    // When: a headless Chrome write reaches the plugin guard after host policy.
+    // When: an RPC Chrome write reaches the plugin guard after host policy.
     const result = await permission?.(
       {
         type: "tool_call",
@@ -176,10 +179,11 @@ describe("OMO Chrome lifecycle", () => {
         toolName: "chrome_open",
         input: { url: "https://example.com/" },
       },
-      { hasUI: false, ui: { confirm: vi.fn() } },
+      { mode: "rpc", hasUI: true, ui: { confirm } },
     );
 
-    // Then: the plugin does not add a second impossible UI gate.
+    // Then: the plugin does not add a second confirmation gate.
     expect(result).toBeUndefined();
+    expect(confirm).not.toHaveBeenCalled();
   });
 });
