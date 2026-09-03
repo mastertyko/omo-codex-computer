@@ -27,8 +27,7 @@ jobs:
           github.event_name == 'push' ||
           (
             github.event_name == 'workflow_run' &&
-            github.event.workflow_run.conclusion == 'success' &&
-            github.event.workflow_run.pull_requests[0].number
+            github.event.workflow_run.conclusion == 'success'
           )
         )
       )
@@ -44,13 +43,31 @@ jobs:
       - name: Wait for automatic merge
         if: github.event_name == 'workflow_run'
         env:
+          AUTO_MERGE_RUN_ID: ${{ github.event.workflow_run.id }}
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
 
+          job_conclusion=$(gh api "repos/$REPOSITORY/actions/runs/$AUTO_MERGE_RUN_ID/jobs" \
+            --jq '[.jobs[] | select(.name == "Enable auto-merge")][0].conclusion // ""')
+          if [ "$job_conclusion" != "success" ]; then
+            echo "Auto-merge job did not succeed; refusing privileged release" >&2
+            exit 1
+          fi
+
+          pr_number=$(gh api "repos/$REPOSITORY/commits/$HEAD_SHA/pulls" \
+            --jq ".[] | select(.base.ref == \"main\" and .head.repo.full_name == \"$REPOSITORY\" and .user.login == \"$REPOSITORY_OWNER\") | .number" \
+            | head -n 1)
+          if [ -z "$pr_number" ]; then
+            echo "No trusted owner pull request found for auto-merge SHA $HEAD_SHA" >&2
+            exit 1
+          fi
+
           for _ in $(seq 1 60); do
-            pr_json=$(gh pr view "$PR_NUMBER" --json state,mergeCommit)
+            pr_json=$(gh pr view "$pr_number" --repo "$REPOSITORY" --json state,mergeCommit)
             state=$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.state ?? "")' "$pr_json")
             merge_sha=$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.mergeCommit?.oid ?? "")' "$pr_json")
 
@@ -59,14 +76,14 @@ jobs:
             fi
 
             if [ "$state" != "OPEN" ]; then
-              echo "Pull request $PR_NUMBER closed without merging" >&2
+              echo "Pull request $pr_number closed without merging" >&2
               exit 1
             fi
 
             sleep 10
           done
 
-          echo "Pull request $PR_NUMBER did not merge before the release timeout" >&2
+          echo "Pull request $pr_number did not merge before the release timeout" >&2
           exit 1
 
       - name: Set up Bun
