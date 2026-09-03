@@ -25,7 +25,7 @@ version.
 Install the published package:
 
 ```bash
-omo install npm:omo-codex-computer
+omo install omo-codex-computer
 ```
 
 For local development:
@@ -45,7 +45,7 @@ omo -e .
 Remove an installed package with:
 
 ```bash
-omo remove npm:omo-codex-computer
+omo remove omo-codex-computer
 ```
 
 ## Tools
