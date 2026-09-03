@@ -214,7 +214,12 @@ describe("ComputerUseTransport", () => {
       "mcpServer/tool/call",
       "mcpServer/tool/call",
     ]);
-    expect(client.calls.map((call) => call.timeoutMs)).toEqual([undefined, undefined, 0, 0]);
+    expect(client.calls.map((call) => call.timeoutMs)).toEqual([
+      undefined,
+      undefined,
+      150_000,
+      150_000,
+    ]);
     expect(client.calls.every((call) => call.signal === controller.signal)).toBe(true);
 
     const [bootstrap, dispatch] = toolRequests(client);

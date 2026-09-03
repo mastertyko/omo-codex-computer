@@ -69,6 +69,7 @@ interface SkyErrorDetails {
 const SKY_ENVELOPE_PROTOCOL = "omo-codex-computer/sky-v1" as const;
 const SCREENSHOT_WARNING = "Warning: Computer Use returned a screenshot that could not be read.";
 const NODE_REPL_EXECUTION_TIMEOUT_MS = 120_000;
+const SKY_APP_SERVER_TIMEOUT_MS = NODE_REPL_EXECUTION_TIMEOUT_MS + 30_000;
 const TOOL_NAME_LOOKUP = Object.fromEntries(
   COMPUTER_USE_MCP_TOOL_NAMES.map((toolName) => [toolName, true] as const),
 ) as Record<string, true>;
@@ -249,7 +250,7 @@ export class ComputerUseTransport {
         title: "Computer Use bootstrap",
         timeout_ms: NODE_REPL_EXECUTION_TIMEOUT_MS,
       },
-    }, 0, signal);
+    }, SKY_APP_SERVER_TIMEOUT_MS, signal);
     readSkyEnvelope(response, "bootstrap");
   }
 
@@ -290,7 +291,7 @@ export class ComputerUseTransport {
         title: `Computer Use: ${tool}`,
         timeout_ms: NODE_REPL_EXECUTION_TIMEOUT_MS,
       },
-    }, 0, signal);
+    }, SKY_APP_SERVER_TIMEOUT_MS, signal);
     const envelope = readSkyEnvelope(response, "dispatch");
 
     return normalizeSkyResponse(tool, envelope, response);
