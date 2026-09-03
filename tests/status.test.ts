@@ -4,7 +4,13 @@ import type * as FsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkComputerUseStatus, evaluateComputerUseStatus, findPlugin, formatComputerUseStatus } from "../src/status";
+import {
+  checkComputerUseStatus,
+  DEFAULT_CHATGPT_APP_PATH,
+  evaluateComputerUseStatus,
+  findPlugin,
+  formatComputerUseStatus,
+} from "../src/status";
 import type { InitializeResponse, McpServerStatusListResponse, PluginListResponse, PluginSummary } from "../src/protocol";
 
 const mockState = vi.hoisted(() => ({
@@ -12,6 +18,7 @@ const mockState = vi.hoisted(() => ({
   execFileStdout: "codex 1.2.3\n",
   accessError: undefined as Error | undefined,
   accessedPaths: [] as string[],
+  existingPaths: [] as string[],
   clientEvents: [] as string[],
   clientCalls: [] as Array<{ method: string; params: unknown }>,
   clientStop: vi.fn(async () => {}),
@@ -31,7 +38,9 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     ...actual,
     access: vi.fn(async (path: string) => {
       mockState.accessedPaths.push(path);
-      if (mockState.accessError) throw mockState.accessError;
+      if (mockState.accessError && !mockState.existingPaths.includes(path)) {
+        throw mockState.accessError;
+      }
     }),
   };
 });
@@ -226,6 +235,7 @@ afterEach(async () => {
   mockState.execFileStdout = "codex 1.2.3\n";
   mockState.accessError = undefined;
   mockState.accessedPaths = [];
+  mockState.existingPaths = [];
   mockState.clientEvents = [];
   mockState.clientCalls = [];
   mockState.clientRequest = undefined;
@@ -502,14 +512,22 @@ describe("findPlugin", () => {
 });
 
 describe("checkComputerUseStatus", () => {
-  it("returns codex_missing without starting app-server when codex --version fails", async () => {
+  it("preserves the desktop app hint without starting app-server when codex is missing", async () => {
     mockState.execFileError = new Error("spawn codex ENOENT");
+    mockState.accessError = new Error("ENOENT");
+    mockState.existingPaths = [DEFAULT_CHATGPT_APP_PATH];
 
     const status = await checkComputerUseStatus("/tmp/project");
 
-    expect(status.reason).toBe("codex_missing");
-    expect(status.error).toBe("spawn codex ENOENT");
-    expect(mockState.accessedPaths).toEqual([]);
+    expect(status).toMatchObject({
+      reason: "codex_missing",
+      error: "spawn codex ENOENT",
+      codexAppPath: DEFAULT_CHATGPT_APP_PATH,
+    });
+    expect(mockState.accessedPaths).toEqual([
+      "/Applications/Codex.app",
+      "/Applications/ChatGPT.app",
+    ]);
     expect(mockState.clientEvents).toEqual([]);
     expect(mockState.clientStop).not.toHaveBeenCalled();
   });

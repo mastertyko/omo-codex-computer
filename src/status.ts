@@ -63,6 +63,17 @@ export interface StatusEvaluationInput {
 }
 
 export async function checkComputerUseStatus(cwd: string): Promise<ComputerUseStatus> {
+  const appPathPromise = Promise.all([
+    pathExists(DEFAULT_CODEX_APP_PATH),
+    pathExists(DEFAULT_CHATGPT_APP_PATH),
+  ]).then(([codexAppExists, chatGptAppExists]) =>
+    codexAppExists
+      ? DEFAULT_CODEX_APP_PATH
+      : chatGptAppExists
+        ? DEFAULT_CHATGPT_APP_PATH
+        : undefined
+  );
+
   let codexVersion: string | undefined;
   try {
     codexVersion = await getCodexVersion();
@@ -70,19 +81,12 @@ export async function checkComputerUseStatus(cwd: string): Promise<ComputerUseSt
     return {
       reason: "codex_missing",
       message: "Codex CLI was not found. Install Codex and ensure `codex` is on PATH.",
+      codexAppPath: await appPathPromise,
       error: error instanceof Error ? error.message : String(error),
     };
   }
 
-  const [codexAppExists, chatGptAppExists] = await Promise.all([
-    pathExists(DEFAULT_CODEX_APP_PATH),
-    pathExists(DEFAULT_CHATGPT_APP_PATH),
-  ]);
-  const codexAppPath = codexAppExists
-    ? DEFAULT_CODEX_APP_PATH
-    : chatGptAppExists
-      ? DEFAULT_CHATGPT_APP_PATH
-      : undefined;
+  const codexAppPath = await appPathPromise;
   const client = new AppServerClient({ requestTimeoutMs: 60_000 });
 
   try {
