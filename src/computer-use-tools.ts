@@ -1,0 +1,269 @@
+import type { ExtensionAPI, ExtensionContext } from "@code-yeongyu/senpi";
+import type { OmpContentBlock } from "./content";
+import { createComputerUseParameterSchemas } from "./computer-use-tool-schemas";
+import type { ComputerUseToolResult } from "./computer-use-backend";
+import type { ComputerUseRuntime } from "./runtime";
+
+const COMPUTER_USE_UPSTREAM_TOOL_NAMES = [
+  "computer_use_list_apps",
+  "computer_use_get_app_state",
+  "computer_use_click",
+  "computer_use_type_text",
+  "computer_use_press_key",
+  "computer_use_scroll",
+  "computer_use_drag",
+  "computer_use_set_value",
+  "computer_use_select_text",
+  "computer_use_perform_secondary_action",
+  "computer_use_paste",
+] as const;
+
+const COMPUTER_USE_LOCAL_TOOL_NAMES = ["computer_use_resolve_app"] as const;
+
+export const COMPUTER_USE_TOOL_NAMES = [
+  ...COMPUTER_USE_UPSTREAM_TOOL_NAMES,
+  ...COMPUTER_USE_LOCAL_TOOL_NAMES,
+] as const;
+
+export type ComputerUseToolName = (typeof COMPUTER_USE_TOOL_NAMES)[number];
+type UpstreamComputerUseToolName = (typeof COMPUTER_USE_UPSTREAM_TOOL_NAMES)[number];
+type LocalComputerUseToolName = (typeof COMPUTER_USE_LOCAL_TOOL_NAMES)[number];
+type ComputerUseToolApproval = "read" | "write";
+
+const COMPUTER_USE_UPSTREAM_TOOLS = [
+  {
+    name: "computer_use_list_apps",
+    mcpToolName: "list_apps",
+    label: "List Apps",
+    description: "List applications currently known to Computer Use. This may omit unbundled macOS GUI processes launched as raw executables; use computer_use_resolve_app when a running local app is missing.",
+    approval: "read",
+  },
+  {
+    name: "computer_use_get_app_state",
+    mcpToolName: "get_app_state",
+    label: "Get App State",
+    description: "Inspect the current state of an application for Computer Use. Prefer stable app targets such as bundle id or .app path over display name. Set disableDiff to true when a complete accessibility tree is needed instead of a diff. If this returns Invalid app for a local development GUI process, call computer_use_resolve_app; raw executables may have visible windows but be missing from the Computer Use app index.",
+    approval: "read",
+  },
+  {
+    name: "computer_use_click",
+    mcpToolName: "click",
+    label: "Click",
+    description: "Click a target in an application through Computer Use. Provide element_index or both x and y; prefer element_index from the latest app state.",
+    approval: "write",
+  },
+  {
+    name: "computer_use_type_text",
+    mcpToolName: "type_text",
+    label: "Type Text",
+    description: "Type text into an application through Computer Use.",
+    approval: "write",
+  },
+  {
+    name: "computer_use_press_key",
+    mcpToolName: "press_key",
+    label: "Press Key",
+    description: "Press a key or keyboard shortcut through Computer Use.",
+    approval: "write",
+  },
+  {
+    name: "computer_use_scroll",
+    mcpToolName: "scroll",
+    label: "Scroll",
+    description: "Scroll within an application through Computer Use.",
+    approval: "write",
+  },
+  {
+    name: "computer_use_drag",
+    mcpToolName: "drag",
+    label: "Drag",
+    description: "Drag from one point to another through Computer Use.",
+    approval: "write",
+  },
+  {
+    name: "computer_use_set_value",
+    mcpToolName: "set_value",
+    label: "Set Value",
+    description: "Set the value of a control through Computer Use.",
+    approval: "write",
+  },
+  {
+    name: "computer_use_select_text",
+    mcpToolName: "select_text",
+    label: "Select Text",
+    description: "Select text in an application through Computer Use.",
+    approval: "write",
+  },
+  {
+    name: "computer_use_perform_secondary_action",
+    mcpToolName: "perform_secondary_action",
+    label: "Secondary Action",
+    description: "Perform a secondary action such as a contextual click through Computer Use.",
+    approval: "write",
+  },
+  {
+    name: "computer_use_paste",
+    mcpToolName: "paste",
+    label: "Paste",
+    description: "Paste text, Markdown, or HTML into the current focus in an application through Computer Use, then restore the previous clipboard contents. Prefer this over typing for large or formatted content.",
+    approval: "write",
+  },
+] as const satisfies ReadonlyArray<{
+  name: UpstreamComputerUseToolName;
+  mcpToolName: string;
+  label: string;
+  description: string;
+  approval: ComputerUseToolApproval;
+}>;
+
+const COMPUTER_USE_LOCAL_TOOLS = [
+  {
+    name: "computer_use_resolve_app",
+    label: "Resolve App",
+    description: "Resolve an application target before using Computer Use. Diagnoses missing registered apps, raw executable paths, PID targets, and bundle id/.app path recommendations without controlling the desktop.",
+    approval: "read",
+  },
+] as const satisfies ReadonlyArray<{
+  name: LocalComputerUseToolName;
+  label: string;
+  description: string;
+  approval: ComputerUseToolApproval;
+}>;
+
+export const COMPUTER_USE_MCP_TOOL_NAMES = Object.freeze(COMPUTER_USE_UPSTREAM_TOOLS.map((tool) => tool.mcpToolName));
+export const COMPUTER_USE_WRITE_TOOL_NAMES = Object.freeze(
+  COMPUTER_USE_UPSTREAM_TOOLS
+    .filter((tool) => tool.approval === "write")
+    .map((tool) => tool.name),
+);
+
+export function registerComputerUseTools(pi: ExtensionAPI, runtime: ComputerUseRuntime): void {
+  const parametersByTool = createComputerUseParameterSchemas();
+
+  for (const tool of COMPUTER_USE_UPSTREAM_TOOLS) {
+    const definition = {
+      name: tool.name,
+      label: tool.label,
+      description: tool.description,
+      parameters: parametersByTool[tool.name],
+      exposure: "search",
+      searchText: tool.description,
+      searchKeywords: ["macOS", "desktop", "computer use", tool.mcpToolName],
+      searchGroup: "codex-computer",
+      allowLazyActivation: true,
+      executionMode: "sequential",
+      prepareArguments: (args: unknown) => prepareComputerUseArguments(tool.name, args),
+      async execute(
+        _toolCallId: string,
+        params: Record<string, unknown>,
+        signal: AbortSignal | undefined,
+        _onUpdate: unknown,
+        ctx: ExtensionContext,
+      ) {
+        const result = signal
+          ? await runtime.callTool(ctx, tool.mcpToolName, params as Record<string, unknown>, signal)
+          : await runtime.callTool(ctx, tool.mcpToolName, params as Record<string, unknown>);
+        return {
+          content: result.content,
+          details: summarizeResult(result),
+        };
+      },
+    };
+    pi.registerTool(definition as Parameters<ExtensionAPI["registerTool"]>[0]);
+  }
+
+  for (const tool of COMPUTER_USE_LOCAL_TOOLS) {
+    const definition = {
+      name: tool.name,
+      label: tool.label,
+      description: tool.description,
+      parameters: parametersByTool[tool.name],
+      exposure: "search",
+      searchText: tool.description,
+      searchKeywords: ["macOS", "desktop", "computer use", "resolve app"],
+      searchGroup: "codex-computer",
+      allowLazyActivation: true,
+      executionMode: "sequential",
+      prepareArguments: (args: unknown) => prepareComputerUseArguments(tool.name, args),
+      async execute(
+        _toolCallId: string,
+        params: Record<string, unknown>,
+        signal: AbortSignal | undefined,
+        _onUpdate: unknown,
+        ctx: ExtensionContext,
+      ) {
+        return executeLocalTool(tool.name, runtime, params, signal, ctx);
+      },
+    };
+    pi.registerTool(definition as Parameters<ExtensionAPI["registerTool"]>[0]);
+  }
+}
+
+async function executeLocalTool(
+  toolName: LocalComputerUseToolName,
+  runtime: ComputerUseRuntime,
+  params: Record<string, unknown>,
+  signal: AbortSignal | undefined,
+  ctx: ExtensionContext,
+) {
+  switch (toolName) {
+    case "computer_use_resolve_app": {
+      const app = typeof params.app === "string" ? params.app : "";
+      const result = signal
+        ? await runtime.resolveAppTarget(ctx, app, signal)
+        : await runtime.resolveAppTarget(ctx, app);
+      return {
+        content: result.content,
+        details: summarizeResult(result),
+      };
+    }
+  }
+}
+
+interface ComputerUseToolSummary {
+  contentTypes: string[];
+  counts: Record<string, number>;
+  hasStructuredContent: boolean;
+  hasMeta: boolean;
+}
+
+function prepareComputerUseArguments(
+  toolName: ComputerUseToolName,
+  args: unknown,
+): Record<string, unknown> {
+  if (!isRecord(args)) throw new Error("Computer Use tool arguments must be an object");
+  if (toolName !== "computer_use_click") return args;
+
+  const hasElementIndex = typeof args.element_index === "string";
+  const hasX = typeof args.x === "number", hasY = typeof args.y === "number";
+  if (hasX !== hasY || (!hasElementIndex && !hasX)) {
+    throw new Error("Provide element_index or both x and y");
+  }
+  return args;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function summarizeResult(result: ComputerUseToolResult): ComputerUseToolSummary {
+  const counts: Record<string, number> = {};
+  const contentTypes: string[] = [];
+
+  for (const block of result.content) {
+    const type = getContentType(block);
+    counts[type] = (counts[type] ?? 0) + 1;
+    if (!contentTypes.includes(type)) contentTypes.push(type);
+  }
+
+  return {
+    contentTypes,
+    counts,
+    hasStructuredContent: result.structuredContent !== undefined,
+    hasMeta: result.meta !== undefined,
+  };
+}
+
+function getContentType(block: OmpContentBlock): string {
+  return typeof block.type === "string" ? block.type : "unknown";
+}
