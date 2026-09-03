@@ -1,5 +1,8 @@
 # omo-codex-computer
 
+[![CI](https://github.com/mastertyko/omo-codex-computer/actions/workflows/ci.yml/badge.svg)](https://github.com/mastertyko/omo-codex-computer/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/omo-codex-computer.svg)](https://www.npmjs.com/package/omo-codex-computer)
+
 OMO Native plugin for OpenAI Codex Computer Use and a constrained first-party
 Chrome automation surface through `codex app-server`.
 
