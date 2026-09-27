@@ -144,7 +144,7 @@ cleanup boundary.
 | `/codex-computer trust` | Contract-checks and live-probes the installed Chrome stack, then persists trust for a passing app-server version. |
 | `/codex-computer trust clear` | Removes persisted Chrome app-server trust. |
 | `/codex-computer enable` | Activates both tool families. |
-| `/codex-computer disable` | Deactivates the tools and stops both runtimes. |
+| `/codex-computer disable` | Blocks both tool families until `enable` and stops both runtimes. |
 | `/codex-computer restart` | Restarts the dedicated app-server runtimes. |
 | `/codex-computer hide-status` | Hides the Computer Use footer status. |
 | `/codex-computer show-status` | Shows the Computer Use footer status. |

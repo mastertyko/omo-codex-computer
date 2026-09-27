@@ -33,6 +33,18 @@ export default function omoCodexComputer(pi: ExtensionAPI): void {
 
   pi.on("resources_discover", () => ({ skillPaths: [SKILLS_DIR] }));
 
+  pi.on("tool_call", (event) => {
+    if (
+      toolsDisabled
+      && [...COMPUTER_USE_TOOL_NAMES, ...CHROME_TOOL_NAMES].some((name) => name === event.toolName)
+    ) {
+      return {
+        block: true,
+        reason: "Codex automation is disabled. Run /codex-computer enable to enable it.",
+      };
+    }
+  });
+
   pi.on("session_start", async (_event, ctx) => {
     try {
       await chromeRuntime.shutdown();

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ExtensionAPI } from "@code-yeongyu/senpi";
 import { CHROME_TOOL_NAMES } from "../src/chrome-tools";
 import { COMPUTER_USE_TOOL_NAMES } from "../src/computer-use-tools";
 import omoCodexComputer from "../src/index";
@@ -46,7 +47,7 @@ vi.mock("../src/chrome-runtime", () => ({
 
 function createFakePi() {
   const tools: unknown[] = [];
-  const commands = new Map<string, unknown>();
+  const commands = new Map<string, Parameters<ExtensionAPI["registerCommand"]>[1]>();
   const handlers = new Map<string, Array<(event: unknown, ctx: unknown) => unknown>>();
   const flags = new Map<string, boolean | string>();
   let activeTools = ["read"];
@@ -58,7 +59,7 @@ function createFakePi() {
     registerTool(tool: unknown): void {
       tools.push(tool);
     },
-    registerCommand(name: string, options: unknown): void {
+    registerCommand(name: string, options: Parameters<ExtensionAPI["registerCommand"]>[1]): void {
       commands.set(name, options);
     },
     registerFlag(
@@ -185,5 +186,79 @@ describe("OMO Chrome lifecycle", () => {
     // Then: the plugin does not add a second confirmation gate.
     expect(confirm).not.toHaveBeenCalled();
     expect(results.every((result) => result === undefined)).toBe(true);
+  });
+
+  it.each(["tui", "rpc", "print"])("blocks disabled automation without blocking other tools in %s mode", async (mode) => {
+    // Given: automation was explicitly disabled in this session.
+    const pi = createFakePi();
+    const ctx = { ...createContext(), mode, hasUI: mode !== "print" };
+    omoCodexComputer(pi as never);
+    const command = pi.commands.get("codex-computer");
+    expect(command).toBeDefined();
+    await command?.handler("disable", ctx as never);
+
+    // When: the host lazily activates and attempts each automation tool.
+    for (const toolName of [...COMPUTER_USE_TOOL_NAMES, ...CHROME_TOOL_NAMES, "read"]) {
+      pi.setActiveTools([...pi.getActiveTools(), toolName]);
+      const results = await Promise.all((pi.handlers.get("tool_call") ?? []).map((handler) =>
+        handler({ type: "tool_call", toolCallId: "call-1", toolName, input: {} }, ctx)
+      ));
+
+      // Then: only automation is blocked, without another confirmation.
+      if (toolName === "read") {
+        expect(results.every((result) => result === undefined)).toBe(true);
+      } else {
+        expect(results).toContainEqual(expect.objectContaining({ block: true }));
+      }
+    }
+    expect(ctx.ui.confirm).not.toHaveBeenCalled();
+  });
+
+  it.each(["session_start", "restart"])("keeps automation disabled after %s", async (transition) => {
+    // Given: an explicitly disabled plugin.
+    const pi = createFakePi();
+    const ctx = createContext();
+    omoCodexComputer(pi as never);
+    const command = pi.commands.get("codex-computer");
+    expect(command).toBeDefined();
+    await command?.handler("disable", ctx as never);
+
+    // When: the session resets or its runtimes restart without an enable command.
+    if (transition === "restart") {
+      await command?.handler("restart", ctx as never);
+    } else {
+      await pi.handlers.get("session_start")?.[0]?.(
+        { type: "session_start", reason: "startup" }, ctx,
+      );
+    }
+    const results = await Promise.all((pi.handlers.get("tool_call") ?? []).map((handler) =>
+      handler({ type: "tool_call", toolCallId: "call-1", toolName: "computer_use_list_apps", input: {} }, ctx)
+    ));
+
+    // Then: automation remains blocked.
+    expect(results).toContainEqual(expect.objectContaining({ block: true }));
+  });
+
+  it("allows automation again after explicit enable", async () => {
+    // Given: an explicitly disabled plugin.
+    const pi = createFakePi();
+    const ctx = createContext();
+    omoCodexComputer(pi as never);
+    const command = pi.commands.get("codex-computer");
+    expect(command).toBeDefined();
+    await command?.handler("disable", ctx as never);
+
+    // When: the user enables automation again.
+    await command?.handler("enable", ctx as never);
+
+    // Then: all managed tools are active and unblocked.
+    for (const toolName of [...COMPUTER_USE_TOOL_NAMES, ...CHROME_TOOL_NAMES]) {
+      expect(pi.getActiveTools()).toContain(toolName);
+      for (const handler of pi.handlers.get("tool_call") ?? []) {
+        expect(await handler(
+          { type: "tool_call", toolCallId: "call-1", toolName, input: {} }, ctx,
+        )).toBeUndefined();
+      }
+    }
   });
 });
